@@ -19,7 +19,11 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import kotlinx.android.synthetic.main.activity_main.*
 import android.util.Log
-import java.text.DecimalFormat
+import android.location.Criteria
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 
 var ACTION_SMS_SENT = "ACTION_SMS_SENT"
@@ -27,7 +31,10 @@ var ACTION_SMS_DELIVERED = "ACTION_SMS_DELIVERED"
 var MY_PERMISSIONS_REQUEST_SEND_SMS = 0
 var longitudAnterior:Double = 0.0
 var latitudAnterior:Double = 0.0
+var new_latitude: Double = 0.0
+var new_longitude: Double = 0.0
 var isFirsTime = true
+var provider: String = ""
 
 class MainActivity : AppCompatActivity() {
 
@@ -56,28 +63,51 @@ class MainActivity : AppCompatActivity() {
         if(Check_FINE_LOCATION(this)){
             // Acquire a reference to the system Location Manager
             val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            var criteria = Criteria()
+            criteria.accuracy = Criteria.ACCURACY_FINE
+            criteria.powerRequirement = Criteria.POWER_HIGH
+            provider = locationManager.getBestProvider(criteria,true)?:""
             // Define a listener that responds to location updates
+
+            val location = locationManager.getLastKnownLocation(provider)
+
+            try {
+                latitudAnterior = location.latitude
+                longitudAnterior = location.longitude
+            } catch (e:Exception) {
+
+            }
+
             val locationListener = object : LocationListener {
 
-                override fun onLocationChanged(location: Location) {
+                override fun onLocationChanged(location2: Location) {
                     // Called when a new location is found by the network location provider.
-                    if(isFirsTime){
+                    /*if(isFirsTime){
                         longitudAnterior = location.longitude
                         latitudAnterior = location.latitude
                         isFirsTime = false
-                    }
-                    txt_altitud.text = location.latitude.toString()
-                    txt_longitud.text = location.longitude.toString()
-                    Log.d("Location","($latitudAnterior,$longitudAnterior)-- (${location.latitude},${location.longitude})")
-                    val metro:FloatArray = FloatArray(4)
-                    Location.distanceBetween(latitudAnterior, longitudAnterior,location.latitude,location.longitude,metro)
+                    }*/
+                    var locaionssd = locationManager.getLastKnownLocation(provider)
+                    new_latitude = locaionssd.latitude
+                    new_longitude = locaionssd.longitude
+
+                    txt_altitud.text = new_latitude.toString()//location.latitude.toString()
+                    txt_longitud.text = new_longitude.toString()//location.longitude.toString()
+                    Log.d("Location","($latitudAnterior,$longitudAnterior)-- ($new_latitude,$new_longitude)")
+                    val metro:FloatArray = FloatArray(3)
+                    Location.distanceBetween(latitudAnterior, longitudAnterior, new_latitude,
+                        new_longitude,metro)
+                    //val distanciaEnMetros = meterDistanceBetweenPoints(latitudAnterior, longitudAnterior, new_latitude, new_longitude)
 
                     txt_metros.text = String.format("${metro[0]} metros")
+                    //txt_metros.text = String.format("$distanciaEnMetros metros")
+                    //sendSms(distanciaEnMetros)
                     if(metro[0]>1.0){
-                        sendSms(metro[0])
+                        //sendSms(metro[0])
+                        Toast.makeText(this@MainActivity,"${metro[0]}",Toast.LENGTH_SHORT).show()
                     }
-                    longitudAnterior = location.longitude
-                    latitudAnterior = location.latitude
+                    longitudAnterior = new_latitude
+                    latitudAnterior = new_latitude
 
                 }
 
@@ -90,11 +120,20 @@ class MainActivity : AppCompatActivity() {
                 override fun onProviderDisabled(provider: String) {
                 }
             }
-
             // Register the listener with the Location Manager to receive location updates
-            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0.98f,locationListener)
+            locationManager.requestLocationUpdates(provider, 1000, 5.0f,locationListener)
         }
 
+    }
+    fun meterDistanceBetweenPoints(lat_a :Double, lng_a:Double, lat_b:Double, lng_b:Double) :Float {
+        var earthRadius:Double = 6371000.0 //meters
+        var dLat:Double = Math.toRadians(lat_b - lat_a)
+        var dLng:Double = Math.toRadians(lng_b - lng_a)
+        var a = sin(dLat / 2) * sin(dLat / 2) + cos(Math.toRadians(lat_a)) * cos(Math.toRadians(lat_b)) * sin(dLng / 2) * sin(dLng / 2)
+        var c :Double = 2 * atan2(sqrt(a), sqrt(1 - a))
+        //Toast.makeText(MainActivity.this, "calculated distance" + dist + "," + Math.abs((float) old_longitude - (float) new_longitude), Toast.LENGTH_LONG).show();
+        //System.out.println("**********this is distance calculation**********" + dist);
+        return (earthRadius * c).toFloat()
     }
 
     fun sendSms(metros:Float){
